@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Baustellen-Scan Viewer · Malerbetrieb Bäßgen</title>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+<style>
+  :root{
+    --ink:#1c1a17;
+    --paper:#f6f3ee;
+    --line:#d8d2c4;
+    --rust:#a8562f;
+    --moss:#4d5b45;
+    --panel:#ffffffcc;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:"Segoe UI", system-ui, -apple-system, sans-serif;
+    overflow:hidden;
+  }
+  #renderCanvas{
+    width:100%;
+    height:100%;
+    display:block;
+    touch-action:none;
+    outline:none;
+  }
+
+  header{
+    position:fixed;
+    top:0; left:0; right:0;
+    z-index:20;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:10px 16px;
+    background:linear-gradient(to bottom, rgba(20,18,15,0.92), rgba(20,18,15,0));
+    pointer-events:none;
+  }
+  header *{pointer-events:auto;}
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    font-weight:600;
+    letter-spacing:0.02em;
+  }
+  .brand .mark{color:var(--rust); font-size:1.1em;}
+  .brand .sub{font-size:0.7rem; font-weight:400; color:#cfc9bc; letter-spacing:0.04em;}
+
+  select#modelSelect{
+    background:var(--panel);
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:0.85rem;
+    max-width:52vw;
+  }
+
+  #hint{
+    position:fixed;
+    left:50%;
+    bottom:22px;
+    transform:translateX(-50%);
+    background:var(--panel);
+    color:var(--ink);
+    border-radius:999px;
+    padding:9px 18px;
+    font-size:0.8rem;
+    box-shadow:0 4px 18px rgba(0,0,0,0.35);
+    z-index:20;
+    max-width:88vw;
+    text-align:center;
+  }
+
+  #empty{
+    position:fixed;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    text-align:center;
+    padding:0 10%;
+    z-index:15;
+  }
+  #empty h1{font-size:1.3rem; font-weight:600; margin:0;}
+  #empty p{color:#bdb6a6; font-size:0.9rem; line-height:1.5; max-width:34em; margin:0;}
+  code{background:#00000055; padding:2px 6px; border-radius:4px; font-size:0.85em;}
+
+  #status{
+    position:fixed;
+    top:60px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#00000099;
+    padding:6px 14px;
+    border-radius:8px;
+    font-size:0.78rem;
+    z-index:20;
+    display:none;
+  }
+
+  #notesPanel{
+    position:fixed;
+    top:60px;
+    right:16px;
+    width:280px;
+    max-height:60vh;
+    overflow-y:auto;
+    background:var(--panel);
+    color:var(--ink);
+    border-radius:10px;
+    padding:14px 16px;
+    font-size:0.85rem;
+    box-shadow:0 6px 20px rgba(0,0,0,0.35);
+    z-index:20;
+    display:none;
+  }
+  #notesPanel h2{
+    font-size:0.9rem;
+    margin:0 0 8px;
+  }
+  #notesPanel ul{
+    margin:0;
+    padding-left:18px;
+  }
+  #notesPanel li{
+    margin-bottom:6px;
+    line-height:1.4;
+  }
+  #notesToggle{
+    background:var(--panel);
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:0.8rem;
+    cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="mark">◆</span> Bäßgen <span class="sub">Baustellen-Scan Viewer</span></div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <button id="notesToggle">Notizen</button>
+    <select id="modelSelect" aria-label="Baustelle auswählen"></select>
+  </div>
+</header>
+
+<canvas id="renderCanvas"></canvas>
+<div id="status"></div>
+<div id="notesPanel"><h2>Notizen</h2><ul id="notesList"></ul></div>
+
+<div id="empty">
+  <h1>Kein Scan geladen</h1>
+  <p>
+    Trag deine Modelle in der Liste <code>MODELS</code> unten in dieser Datei ein und lade die
+    zugehörigen <code>.glb</code>-Dateien ins Repo hoch.
+  </p>
+</div>
+
+<div id="hint" style="display:none">
+  Maus/Finger: drehen &amp; zoomen · In der VR-Brille: unten rechts „Enter VR" antippen, mit dem
+  Controller auf den Boden zielen und den Trigger drücken zum Teleportieren
+</div>
+
+<script>
+/* ====================== MODELLE HIER EINTRAGEN ======================
+   name: wird im Dropdown angezeigt
+   src:  Pfad zur .glb-Datei relativ zu dieser HTML-Datei
+   ==================================================================== */
+const MODELS = [
+  {
+    name: "Wohnzimmer Test",
+    src: "Wohnzimmer_Test.glb",
+    notes: [
+      // Hier einfach Stichpunkte eintragen, z.B.:
+      // "Decke: zweiter Anstrich nötig",
+      // "Fensterrahmen links: Kunde wünscht RAL 9010"
+    ]
+  },
+  // {
+  //   name: "Musterstraße 12 — Fassade",
+  //   src: "models/musterstrasse12.glb",
+  //   notes: [
+  //     "Riss unter dem Fenster vor Anstrich spachteln",
+  //     "Regenrinne demontieren vor Grundierung"
+  //   ]
+  // },
+];
+
+const canvas     = document.getElementById('renderCanvas');
+const select     = document.getElementById('modelSelect');
+const empty      = document.getElementById('empty');
+const hint       = document.getElementById('hint');
+const statusEl   = document.getElementById('status');
+const notesPanel = document.getElementById('notesPanel');
+const notesList  = document.getElementById('notesList');
+const notesToggle= document.getElementById('notesToggle');
+
+notesToggle.addEventListener('click', () => {
+  notesPanel.style.display = (notesPanel.style.display === 'block') ? 'none' : 'block';
+});
+
+function renderNotes(notes){
+  notesList.innerHTML = '';
+  if (!notes || !notes.length){
+    const li = document.createElement('li');
+    li.textContent = 'Keine Notizen für dieses Modell.';
+    li.style.opacity = '0.6';
+    notesList.appendChild(li);
+    return;
+  }
+  notes.forEach(n => {
+    const li = document.createElement('li');
+    li.textContent = n;
+    notesList.appendChild(li);
+  });
+}
+
+const engine = new BABYLON.Engine(canvas, true, { stencil: true, preserveDrawingBuffer: true });
+let scene, currentRoot = null, xrHelper = null;
+
+function showStatus(msg, ms){
+  statusEl.textContent = msg;
+  statusEl.style.display = 'block';
+  if (ms) setTimeout(() => statusEl.style.display = 'none', ms);
+}
+
+async function createScene(){
+  const s = new BABYLON.Scene(engine);
+  s.clearColor = new BABYLON.Color4(0.08, 0.075, 0.06, 1);
+
+  const camera = new BABYLON.ArcRotateCamera(
+    "cam", -Math.PI / 2, Math.PI / 2.5, 4, BABYLON.Vector3.Zero(), s
+  );
+  camera.attachControl(canvas, true);
+  camera.wheelPrecision = 40;
+  camera.lowerRadiusLimit = 0.3;
+
+  const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), s);
+  hemi.intensity = 1.0;
+  const dir = new BABYLON.DirectionalLight("dir", new BABYLON.Vector3(-1, -2, -1), s);
+  dir.intensity = 0.6;
+
+  // Floor used as the WebXR teleportation target
+  const floor = BABYLON.MeshBuilder.CreateGround("floor", { width: 30, height: 30 }, s);
+  floor.isVisible = false;
+  floor.position.y = 0;
+
+  // WebXR default experience — configured for point-and-click teleportation
+  // (laser pointer at the floor + trigger press) instead of stick-based walking.
+  try {
+    xrHelper = await s.createDefaultXRExperienceAsync({
+      floorMeshes: [floor],
+      disableTeleportation: false
+    });
+
+    // Turn off smooth stick-locomotion so the right stick doesn't "walk" the user.
+    xrHelper.featuresManager.disableFeature(BABYLON.WebXRFeatureName.MOVEMENT);
+
+    // Make teleportation trigger on the main select button (trigger) rather than
+    // requiring the thumbstick to be pushed and released.
+    const teleportation = xrHelper.featuresManager.getEnabledFeature(BABYLON.WebXRFeatureName.TELEPORTATION);
+    if (teleportation) {
+      teleportation.useMainComponentOnly = true;
+      teleportation.rotationEnabled = true;
+    }
+  } catch (e) {
+    console.warn("WebXR nicht verfügbar:", e);
+  }
+
+  return s;
+}
+
+function disposeCurrentModel(){
+  if (currentRoot) {
+    currentRoot.dispose(false, true);
+    currentRoot = null;
+  }
+}
+
+async function loadModel(index){
+  const m = MODELS[index];
+  if (!m) return;
+  empty.style.display = 'none';
+  hint.style.display = 'block';
+  disposeCurrentModel();
+  showStatus('Lade Modell …');
+
+  try {
+    const result = await BABYLON.SceneLoader.ImportMeshAsync("", "", m.src, scene);
+    currentRoot = new BABYLON.TransformNode("modelRoot", scene);
+    result.meshes.forEach(mesh => { if (!mesh.parent) mesh.parent = currentRoot; });
+
+    // Frame camera on the loaded model
+    const camera = scene.activeCamera;
+    if (camera && camera.setTarget) {
+      let min = null, max = null;
+      result.meshes.forEach(mesh => {
+        if (!mesh.getBoundingInfo) return;
+        const bb = mesh.getBoundingInfo().boundingBox;
+        const meshMin = bb.minimumWorld, meshMax = bb.maximumWorld;
+        min = min ? BABYLON.Vector3.Minimize(min, meshMin) : meshMin.clone();
+        max = max ? BABYLON.Vector3.Maximize(max, meshMax) : meshMax.clone();
+      });
+      if (min && max) {
+        const center = min.add(max).scale(0.5);
+        camera.setTarget(center);
+        camera.radius = BABYLON.Vector3.Distance(min, max) * 0.8 || 4;
+      }
+    }
+    statusEl.style.display = 'none';
+    renderNotes(m.notes);
+  } catch (err) {
+    console.error(err);
+    showStatus('Fehler beim Laden — Dateiname/Pfad in MODELS prüfen.', 6000);
+  }
+}
+
+function populateSelect(){
+  select.innerHTML = '';
+  MODELS.forEach((m, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = m.name;
+    select.appendChild(opt);
+  });
+}
+
+(async () => {
+  scene = await createScene();
+  engine.runRenderLoop(() => scene.render());
+  window.addEventListener('resize', () => engine.resize());
+
+  if (MODELS.length) {
+    populateSelect();
+    select.addEventListener('change', e => loadModel(parseInt(e.target.value, 10)));
+    loadModel(0);
+  } else {
+    select.style.display = 'none';
+  }
+})();
+</script>
+
+</body>
+</html>

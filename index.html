@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Baustellen-Scan Viewer · Malerbetrieb Bäßgen</title>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+<style>
+  :root{
+    --ink:#1c1a17;
+    --paper:#f6f3ee;
+    --line:#d8d2c4;
+    --rust:#a8562f;
+    --rust-dark:#8a4424;
+    --moss:#4d5b45;
+    --panel:#ffffffcc;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:"Segoe UI", system-ui, -apple-system, sans-serif;
+    overflow:hidden;
+  }
+
+  /* ---------- Top bar ---------- */
+  header{
+    position:fixed;
+    top:0; left:0; right:0;
+    z-index:20;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:10px 16px;
+    background:linear-gradient(to bottom, rgba(20,18,15,0.92), rgba(20,18,15,0));
+    pointer-events:none;
+  }
+  header *{pointer-events:auto;}
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    font-weight:600;
+    letter-spacing:0.02em;
+  }
+  .brand .mark{
+    color:var(--rust);
+    font-size:1.1em;
+  }
+  .brand .sub{
+    font-size:0.7rem;
+    font-weight:400;
+    color:#cfc9bc;
+    letter-spacing:0.04em;
+  }
+  select#modelSelect{
+    background:var(--panel);
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:0.85rem;
+    max-width:52vw;
+  }
+
+  /* ---------- Viewer ---------- */
+  model-viewer{
+    width:100%;
+    height:100%;
+    background:radial-gradient(circle at 50% 35%, #2b2822 0%, #14120f 70%);
+    --poster-color: transparent;
+  }
+  model-viewer::part(default-ar-button){
+    display:none;
+  }
+
+  /* ---------- Empty state ---------- */
+  #empty{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    text-align:center;
+    padding:0 10%;
+  }
+  #empty h1{
+    font-size:1.3rem;
+    font-weight:600;
+    margin:0;
+  }
+  #empty p{
+    color:#bdb6a6;
+    font-size:0.9rem;
+    line-height:1.5;
+    max-width:34em;
+    margin:0;
+  }
+  code{
+    background:#00000055;
+    padding:2px 6px;
+    border-radius:4px;
+    font-size:0.85em;
+  }
+
+  /* ---------- Hint bubble ---------- */
+  #hint{
+    position:fixed;
+    left:50%;
+    bottom:22px;
+    transform:translateX(-50%);
+    background:var(--panel);
+    color:var(--ink);
+    border-radius:999px;
+    padding:9px 18px;
+    font-size:0.8rem;
+    box-shadow:0 4px 18px rgba(0,0,0,0.35);
+    z-index:20;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    max-width:88vw;
+  }
+  #hint .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--moss);
+    flex:none;
+  }
+
+  /* ---------- Hotspot ---------- */
+  .hotspot{
+    background:var(--rust);
+    width:26px;height:26px;
+    border-radius:50%;
+    border:2px solid #fff;
+    box-shadow:0 2px 8px rgba(0,0,0,0.4);
+    cursor:pointer;
+  }
+  .hotspot-annotation{
+    background:var(--panel);
+    color:var(--ink);
+    padding:6px 10px;
+    border-radius:6px;
+    font-size:0.8rem;
+    max-width:44vw;
+    box-shadow:0 3px 10px rgba(0,0,0,0.3);
+  }
+
+  /* ---------- Progress ---------- */
+  .progress-track{
+    position:absolute;
+    left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    width:140px; height:4px;
+    background:#ffffff22;
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .progress-bar{
+    background:var(--rust);
+    width:0%; height:100%;
+  }
+  model-viewer[loading] .progress-track{display:block;}
+
+  @media (max-width:600px){
+    .brand .sub{display:none;}
+    select#modelSelect{max-width:44vw;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="mark">◆</span> Bäßgen <span class="sub">Baustellen-Scan Viewer</span></div>
+  <select id="modelSelect" aria-label="Baustelle auswählen"></select>
+</header>
+
+<model-viewer id="viewer"
+  camera-controls
+  touch-action="pan-y"
+  ar
+  ar-modes="webxr"
+  xr-environment
+  shadow-intensity="1"
+  exposure="1"
+  interaction-prompt="none"
+  style="display:none">
+  <button slot="ar-button" id="vrButton">In VR/AR ansehen</button>
+  <div class="progress-track" slot="progress-bar">
+    <div class="progress-bar"></div>
+  </div>
+</model-viewer>
+
+<div id="empty">
+  <h1>Kein Scan geladen</h1>
+  <p>
+    Diese Seite zeigt 3D-Scans aus Polycam direkt im Browser an — auch in VR-Brillen wie der Meta Quest,
+    ganz ohne Login. Trag deine Modelle unten in der Liste ein (Datei <code>models.js</code>) und lade die
+    zugehörigen <code>.glb</code>-Dateien in den Ordner <code>models/</code> hoch.
+  </p>
+</div>
+
+<div id="hint" style="display:none">
+  <span class="dot"></span>
+  <span>Mit dem Finger/Controller drehen &amp; zoomen · Für den VR-Modus oben rechts das Modell wählen und auf „In VR/AR ansehen" tippen</span>
+</div>
+
+<script>
+/*
+  MODELLE HIER EINTRAGEN
+  -----------------------
+  Jede Zeile ist eine Baustelle/ein Scan. "src" zeigt auf die .glb-Datei
+  im Ordner "models/" (relativ zu dieser HTML-Datei).
+
+  hotspots (optional): Punkte mit Kommentaren, die im Modell angezeigt werden.
+  position/normal sind 3D-Koordinaten aus dem Modell — am einfachsten durch
+  Ausprobieren finden (Werte anpassen, Seite neu laden, bis der Punkt richtig sitzt).
+*/
+const MODELS = [
+  {
+    name: "Beispiel — Musterprojekt",
+    src: "models/beispiel.glb",
+    hotspots: [
+      // { position: "0 1 0", normal: "0 1 0", label: "Hier zuerst grundieren" }
+    ]
+  }
+  // Weitere Projekte einfach als weiteres Objekt hinzufügen:
+  // {
+  //   name: "Musterstraße 12 — Fassade",
+  //   src: "models/musterstrasse12.glb",
+  //   hotspots: [
+  //     { position: "0.5 1.2 -0.3", normal: "0 0 1", label: "Riss, vor Anstrich spachteln" }
+  //   ]
+  // },
+];
+
+const select   = document.getElementById('modelSelect');
+const viewer   = document.getElementById('viewer');
+const empty    = document.getElementById('empty');
+const hint     = document.getElementById('hint');
+
+function populateSelect(){
+  select.innerHTML = '';
+  MODELS.forEach((m, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = m.name;
+    select.appendChild(opt);
+  });
+}
+
+function clearHotspots(){
+  viewer.querySelectorAll('[slot^="hotspot-"]').forEach(el => el.remove());
+}
+
+function addHotspots(hotspots){
+  clearHotspots();
+  (hotspots || []).forEach((h, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'hotspot';
+    btn.slot = `hotspot-${i}`;
+    btn.dataset.position = h.position;
+    btn.dataset.normal = h.normal || "0 1 0";
+    btn.setAttribute('data-position', h.position);
+    btn.setAttribute('data-normal', h.normal || "0 1 0");
+    btn.setAttribute('slot', `hotspot-${i}`);
+
+    const label = document.createElement('div');
+    label.className = 'hotspot-annotation';
+    label.textContent = h.label;
+    btn.appendChild(label);
+
+    viewer.appendChild(btn);
+    viewer.updateHotspot({ name: `hotspot-${i}`, position: h.position, normal: h.normal || "0 1 0" });
+  });
+}
+
+function loadModel(index){
+  const m = MODELS[index];
+  if (!m) return;
+  empty.style.display = 'none';
+  hint.style.display = 'flex';
+  viewer.style.display = 'block';
+  viewer.src = m.src;
+  addHotspots(m.hotspots);
+}
+
+if (MODELS.length){
+  populateSelect();
+  select.addEventListener('change', e => loadModel(e.target.value));
+  loadModel(0);
+} else {
+  select.style.display = 'none';
+}
+
+viewer.addEventListener('error', () => {
+  hint.textContent = 'Datei konnte nicht geladen werden — Pfad in models.js und Dateiname prüfen.';
+});
+</script>
+
+</body>
+</html>

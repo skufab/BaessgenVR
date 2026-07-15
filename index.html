@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Baustellen-Scan Viewer · Malerbetrieb Bäßgen</title>
+
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+<style>
+  :root{
+    --ink:#1c1a17;
+    --paper:#f6f3ee;
+    --line:#d8d2c4;
+    --ci-red:#E3001B;
+    --ci-red-dark:#970A11;
+    --ci-black:#201D22;
+    --rust: var(--ci-red);
+    --moss:#201D22;
+    --panel:#ffffffee;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:"Segoe UI", system-ui, -apple-system, sans-serif;
+    overflow:hidden;
+  }
+  #renderCanvas{
+    width:100%;
+    height:100%;
+    display:block;
+    touch-action:none;
+    outline:none;
+  }
+
+  header{
+    position:fixed;
+    top:0; left:0; right:0;
+    z-index:20;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:10px 16px;
+    background:linear-gradient(to bottom, #E2001A 0%, #C40015 55%, #970A11 100%);
+    box-shadow:0 2px 10px rgba(0,0,0,0.35);
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    font-weight:800;
+    letter-spacing:0.01em;
+    color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,0.35);
+  }
+  .brand .mark{
+    color:#fff;
+    font-size:1.1em;
+    -webkit-text-stroke:1px var(--ci-black);
+  }
+  .brand .sub{font-size:0.7rem; font-weight:600; color:#ffe1e1; letter-spacing:0.04em;}
+
+  select#modelSelect{
+    background:#fff;
+    color:var(--ci-black);
+    border:1px solid var(--ci-black);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:0.85rem;
+    font-weight:600;
+    max-width:52vw;
+  }
+
+  #placeToggle{
+    background:var(--ci-black);
+    color:#fff;
+    border:2px solid #fff;
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:0.8rem;
+    font-weight:700;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  #placeToggle.active{
+    background:#fff;
+    color:var(--ci-red);
+    border-color:var(--ci-red);
+  }
+
+  #hint{
+    position:fixed;
+    left:50%;
+    bottom:22px;
+    transform:translateX(-50%);
+    background:var(--panel);
+    color:var(--ink);
+    border-radius:999px;
+    border:2px solid var(--ci-red);
+    padding:9px 18px;
+    font-size:0.8rem;
+    font-weight:600;
+    box-shadow:0 4px 18px rgba(0,0,0,0.35);
+    z-index:20;
+    max-width:88vw;
+    text-align:center;
+  }
+
+  #empty{
+    position:fixed;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    text-align:center;
+    padding:0 10%;
+    z-index:15;
+  }
+  #empty h1{font-size:1.3rem; font-weight:600; margin:0;}
+  #empty p{color:#bdb6a6; font-size:0.9rem; line-height:1.5; max-width:34em; margin:0;}
+  code{background:#00000055; padding:2px 6px; border-radius:4px; font-size:0.85em;}
+
+  #status{
+    position:fixed;
+    top:60px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#00000099;
+    padding:6px 14px;
+    border-radius:8px;
+    font-size:0.78rem;
+    z-index:20;
+    display:none;
+  }
+
+  #notesPanel{
+    position:fixed;
+    top:60px;
+    right:16px;
+    width:280px;
+    max-height:60vh;
+    overflow-y:auto;
+    background:var(--panel);
+    color:var(--ink);
+    border-radius:10px;
+    border-top:4px solid var(--ci-red);
+    padding:14px 16px;
+    font-size:0.85rem;
+    box-shadow:0 6px 20px rgba(0,0,0,0.35);
+    z-index:20;
+  }
+  #notesPanel h2{
+    font-size:0.9rem;
+    font-weight:800;
+    color:var(--ci-red);
+    margin:0 0 8px;
+  }
+  .note-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:6px;
+    margin-bottom:8px;
+    line-height:1.35;
+  }
+  .note-row .note-text{flex:1;}
+  .note-row .note-actions{
+    display:flex;
+    gap:4px;
+    flex:none;
+  }
+  .note-row button{
+    border:1px solid var(--ci-black);
+    background:#fff;
+    color:var(--ci-black);
+    border-radius:5px;
+    padding:3px 7px;
+    font-size:0.7rem;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .note-row button:hover{
+    background:var(--ci-red);
+    color:#fff;
+    border-color:var(--ci-red);
+  }
+
+  #xrDebug{
+    position:fixed;
+    bottom:60px;
+    left:16px;
+    max-width:60vw;
+    background:#00000099;
+    color:#ffb199;
+    padding:8px 12px;
+    border-radius:8px;
+    font-size:0.72rem;
+    font-family:monospace;
+    z-index:20;
+    display:none;
+    white-space:pre-wrap;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="mark">◆</span> Bäßgen <span class="sub">Baustellen-Scan Viewer</span></div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <button id="placeToggle">Notiz hinzufügen</button>
+    <select id="modelSelect" aria-label="Baustelle auswählen"></select>
+  </div>
+</header>
+
+<canvas id="renderCanvas"></canvas>
+<div id="status"></div>
+<div id="xrDebug"></div>
+<div id="notesPanel">
+  <h2>Notizen</h2>
+  <ul id="notesList" style="list-style:none; margin:0; padding:0;"></ul>
+</div>
+
+<div id="empty">
+  <h1>Kein Scan geladen</h1>
+  <p>
+    Trag deine Modelle in der Liste <code>MODELS</code> unten in dieser Datei ein.
+  </p>
+</div>
+
+<div id="hint" style="display:none">
+  Maus/Finger: drehen &amp; zoomen · VR-Brille: „Enter VR" antippen, mit dem LINKEN Stick um die
+  eigene Achse drehen, Controller auf den Boden richten und kurz den Trigger drücken zum
+  Teleportieren · „Notiz hinzufügen" + Klick auf eine Wand, um dort eine Notiz zu setzen · Notiz am
+  Marker ziehen zum Verschieben · Bearbeiten/Löschen über den „Notizen"-Bereich
+</div>
+
+<script>
+/* ====================== PROJEKTE HIER EINTRAGEN ======================
+   name: wird im Dropdown angezeigt
+   src:  Pfad/URL zur .glb-Datei
+   notes: [{ position:[x,y,z], text:"..." }, ...] — Position per "Notiz hinzufügen" ermitteln
+   ======================================================================
+   Hinweis: Dies ist der lokale Platzhalter-Stand. Sobald der Abruf über
+   NocoDB/VPN steht, ersetzt eine fetch()-Abfrage diese feste Liste. */
+const MODELS = [
+  {
+    name: "Wohnzimmer Test",
+    src: "Wohnzimmer_Test.glb",
+    notes: [
+      // { position: [0.5, 1.2, -0.3], text: "Riss vor Anstrich spachteln" },
+    ]
+  },
+];
+
+const canvas      = document.getElementById('renderCanvas');
+const select      = document.getElementById('modelSelect');
+const empty       = document.getElementById('empty');
+const hint        = document.getElementById('hint');
+const statusEl    = document.getElementById('status');
+const notesPanel  = document.getElementById('notesPanel');
+const notesList   = document.getElementById('notesList');
+const placeToggle = document.getElementById('placeToggle');
+
+let placementMode = false;
+let currentNotes = [];  // { id, position:[x,y,z], text, sphere, plane }
+let currentModelIndex = 0;
+let dragNote = null;
+let dragMoved = false;
+let dragStartX = 0, dragStartY = 0;
+
+placeToggle.addEventListener('click', () => {
+  placementMode = !placementMode;
+  placeToggle.classList.toggle('active', placementMode);
+  placeToggle.textContent = placementMode ? 'Klicke auf die Wand …' : 'Notiz hinzufügen';
+});
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+  const words = text.split(' ');
+  let line = '';
+  let yy = y;
+  words.forEach(word => {
+    const test = line + word + ' ';
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, yy);
+      line = word + ' ';
+      yy += lineHeight;
+    } else {
+      line = test;
+    }
+  });
+  ctx.fillText(line, x, yy);
+}
+
+function buildLabelTexture(note){
+  const dt = new BABYLON.DynamicTexture(`noteTex-${note.id}`, { width: 512, height: 128 }, scene);
+  dt.hasAlpha = true;
+  const ctx = dt.getContext();
+  ctx.clearRect(0, 0, 512, 128);
+  ctx.fillStyle = "#ffffff";
+  roundRect(ctx, 4, 4, 504, 120, 16);
+  ctx.fillStyle = "#E3001B";
+  ctx.fillRect(4, 4, 504, 8);
+  ctx.fillStyle = "#201D22";
+  ctx.font = "28px sans-serif";
+  wrapText(ctx, note.text, 20, 50, 470, 32);
+  dt.update();
+  return dt;
+}
+
+function createNoteMeshes(note){
+  const sphere = BABYLON.MeshBuilder.CreateSphere(`noteMarker-${note.id}`, { diameter: 0.09 }, scene);
+  sphere.position = new BABYLON.Vector3(note.position[0], note.position[1], note.position[2]);
+  sphere.metadata = { noteId: note.id };
+  const mat = new BABYLON.StandardMaterial(`noteMat-${note.id}`, scene);
+  mat.emissiveColor = BABYLON.Color3.FromHexString("#E3001B");
+  mat.disableLighting = true;
+  sphere.material = mat;
+
+  const plane = BABYLON.MeshBuilder.CreatePlane(`noteLabel-${note.id}`, { width: 1, height: 0.3 }, scene);
+  plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+  plane.isPickable = false;
+  plane.parent = sphere;
+  plane.position = new BABYLON.Vector3(0, 0.16, 0);
+  const labelMat = new BABYLON.StandardMaterial(`labelMat-${note.id}`, scene);
+  labelMat.diffuseTexture = buildLabelTexture(note);
+  labelMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+  labelMat.backFaceCulling = false;
+  labelMat.useAlphaFromDiffuseTexture = true;
+  plane.material = labelMat;
+
+  note.sphere = sphere;
+  note.plane = plane;
+}
+
+function updateNoteLabel(note){
+  if (note.plane && note.plane.material) {
+    note.plane.material.diffuseTexture.dispose();
+    note.plane.material.diffuseTexture = buildLabelTexture(note);
+  }
+}
+
+function disposeNote(note){
+  if (note.plane) note.plane.dispose();
+  if (note.sphere) note.sphere.dispose();
+}
+
+function clearCurrentNotes(){
+  currentNotes.forEach(disposeNote);
+  currentNotes = [];
+}
+
+function makeNote(position, text){
+  const note = {
+    id: Math.random().toString(36).slice(2, 9),
+    position: position,
+    text: text
+  };
+  createNoteMeshes(note);
+  currentNotes.push(note);
+  return note;
+}
+
+function refreshNotesList(){
+  notesList.innerHTML = '';
+  if (!currentNotes.length){
+    const li = document.createElement('li');
+    li.textContent = 'Keine Notizen für dieses Modell.';
+    li.style.opacity = '0.6';
+    notesList.appendChild(li);
+    return;
+  }
+  currentNotes.forEach(note => {
+    const row = document.createElement('div');
+    row.className = 'note-row';
+
+    const span = document.createElement('span');
+    span.className = 'note-text';
+    span.textContent = note.text;
+
+    const actions = document.createElement('div');
+    actions.className = 'note-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.textContent = 'Ändern';
+    editBtn.addEventListener('click', () => {
+      const newText = prompt('Notiz-Text ändern:', note.text);
+      if (newText === null || newText === '') return;
+      note.text = newText;
+      updateNoteLabel(note);
+      refreshNotesList();
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.textContent = 'Löschen';
+    delBtn.addEventListener('click', () => {
+      if (!confirm('Diese Notiz wirklich löschen?')) return;
+      disposeNote(note);
+      currentNotes = currentNotes.filter(n => n.id !== note.id);
+      refreshNotesList();
+    });
+
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    row.appendChild(span);
+    row.appendChild(actions);
+    notesList.appendChild(row);
+  });
+}
+
+function renderNotes(notesData){
+  clearCurrentNotes();
+  (notesData || []).forEach(n => makeNote([...n.position], n.text));
+  refreshNotesList();
+}
+
+// ---- Placement (adding new notes) ----
+function handlePlacementClick(pointerInfo){
+  if (!placementMode) return;
+  if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
+  const pick = pointerInfo.pickInfo;
+  if (!pick || !pick.hit || !pick.pickedPoint) return;
+  if (pick.pickedMesh && pick.pickedMesh.name.startsWith('noteMarker')) return; // clicked an existing note
+
+  const text = prompt('Notiz-Text für diese Stelle:');
+  if (!text) return;
+
+  const p = pick.pickedPoint;
+  const posArr = [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100, Math.round(p.z * 100) / 100];
+  makeNote(posArr, text);
+  refreshNotesList();
+}
+
+// ---- Dragging existing notes (desktop mouse / touch) ----
+function handleDrag(pointerInfo){
+  const type = pointerInfo.type;
+
+  if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
+    if (placementMode) return;
+    const pick = scene.pick(scene.pointerX, scene.pointerY, m => m.name && m.name.startsWith('noteMarker'));
+    if (pick && pick.hit) {
+      const note = currentNotes.find(n => n.sphere === pick.pickedMesh);
+      if (note) {
+        dragNote = note;
+        dragMoved = false;
+        dragStartX = scene.pointerX;
+        dragStartY = scene.pointerY;
+        scene.activeCamera.detachControl(canvas);
+      }
+    }
+  } else if (type === BABYLON.PointerEventTypes.POINTERMOVE) {
+    if (!dragNote) return;
+    const dx = scene.pointerX - dragStartX, dy = scene.pointerY - dragStartY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
+
+    const camera = scene.activeCamera;
+    const camDir = camera.getForwardRay().direction;
+    const plane = BABYLON.Plane.FromPositionAndNormal(dragNote.sphere.position, camDir);
+    const ray = scene.createPickingRay(scene.pointerX, scene.pointerY, BABYLON.Matrix.Identity(), camera);
+    const distance = ray.intersectsPlane(plane);
+    if (distance !== null && distance !== undefined) {
+      const point = ray.origin.add(ray.direction.scale(distance));
+      dragNote.sphere.position = point;
+      dragNote.position = [Math.round(point.x * 100) / 100, Math.round(point.y * 100) / 100, Math.round(point.z * 100) / 100];
+    }
+  } else if (type === BABYLON.PointerEventTypes.POINTERUP) {
+    if (dragNote) {
+      scene.activeCamera.attachControl(canvas, true);
+      dragNote = null;
+    }
+  }
+}
+
+const engine = new BABYLON.Engine(canvas, true, { stencil: true, preserveDrawingBuffer: true });
+let scene, currentRoot = null, xrHelper = null;
+
+function showStatus(msg, ms){
+  statusEl.textContent = msg;
+  statusEl.style.display = 'block';
+  if (ms) setTimeout(() => statusEl.style.display = 'none', ms);
+}
+
+const xrDebugEl = document.getElementById('xrDebug');
+function logXrDebug(msg){
+  xrDebugEl.style.display = 'block';
+  xrDebugEl.textContent += (xrDebugEl.textContent ? '\n' : '') + msg;
+}
+
+async function createScene(){
+  const s = new BABYLON.Scene(engine);
+  s.clearColor = new BABYLON.Color4(0.08, 0.075, 0.06, 1);
+
+  const camera = new BABYLON.ArcRotateCamera(
+    "cam", -Math.PI / 2, Math.PI / 2.5, 4, BABYLON.Vector3.Zero(), s
+  );
+  camera.attachControl(canvas, true);
+  camera.wheelPrecision = 40;
+  camera.lowerRadiusLimit = 0.3;
+
+  const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 1, 0), s);
+  hemi.intensity = 1.0;
+  const dir = new BABYLON.DirectionalLight("dir", new BABYLON.Vector3(-1, -2, -1), s);
+  dir.intensity = 0.6;
+
+  // Floor used as the WebXR teleportation target
+  const floor = BABYLON.MeshBuilder.CreateGround("floor", { width: 30, height: 30 }, s);
+  floor.isVisible = false;
+  floor.position.y = 0;
+
+  // WebXR default experience — trigger-based teleportation, stick-turning kept,
+  // stick-walking switched off. Each feature is configured defensively so a
+  // problem with one doesn't silently break the other.
+  try {
+    xrHelper = await s.createDefaultXRExperienceAsync({
+      floorMeshes: [floor]
+    });
+
+    const fm = xrHelper.baseExperience.featuresManager;
+
+    const safeDisable = (name) => {
+      try { fm.disableFeature(name); } catch (e) { /* wasn't enabled — fine */ }
+    };
+    const safeEnable = (name, version, options) => {
+      try {
+        fm.enableFeature(name, version, options);
+        logXrDebug(`OK: ${name} aktiviert`);
+      } catch (e) {
+        logXrDebug(`FEHLER (${name}): ${e.message}`);
+        console.error(name, e);
+      }
+    };
+
+    safeDisable(BABYLON.WebXRFeatureName.TELEPORTATION);
+    logXrDebug("XR-Setup gestartet …");
+
+    // Teleportation: point at the floor, press the trigger and hold briefly.
+    safeEnable(BABYLON.WebXRFeatureName.TELEPORTATION, "stable", {
+      xrInput: xrHelper.input,
+      floorMeshes: [floor],
+      useMainComponentOnly: true,
+      timeToTeleport: 400,
+      defaultTargetMeshOptions: {
+        teleportationFillColor: "#ffffff",
+        teleportationBorderColor: "#201D22"
+      }
+    });
+
+    // Laser pointer in the company red.
+    const pointerFeature = fm.getEnabledFeature(BABYLON.WebXRFeatureName.POINTER_SELECTION);
+    if (pointerFeature) {
+      pointerFeature.laserPointerDefaultColor = BABYLON.Color3.FromHexString("#E3001B");
+      pointerFeature.laserPointerPickedColor = BABYLON.Color3.FromHexString("#970A11");
+    }
+
+    // Movement: keep the feature technically "enabled" (some versions of this
+    // Babylon feature tie rotation processing to movementEnabled internally),
+    // but zero out the walking speed so the stick only turns you, never walks you.
+    const movementFeature = fm.getEnabledFeature(BABYLON.WebXRFeatureName.MOVEMENT);
+    if (movementFeature) {
+      movementFeature.movementEnabled = true;
+      movementFeature.movementSpeed = 0;
+      movementFeature.rotationEnabled = true;
+      movementFeature.rotationSpeed = 0.3;
+      logXrDebug("OK: Movement angepasst (Geschwindigkeit 0, Drehen an)");
+    } else {
+      logXrDebug("Movement-Feature nicht gefunden — Stick-Drehen evtl. nicht verfügbar");
+    }
+  } catch (e) {
+    logXrDebug("WebXR nicht verfügbar: " + e.message);
+    console.warn("WebXR nicht verfügbar:", e);
+  }
+
+  // Charming little welcome sign in company colors, shown briefly whenever
+  // someone enters the immersive VR mode.
+  if (xrHelper) {
+    xrHelper.baseExperience.onStateChangedObservable.add((state) => {
+      if (state === BABYLON.WebXRState.IN_XR) {
+        showWelcomeSign(s);
+      }
+    });
+  }
+
+  s.onPointerObservable.add(handlePlacementClick);
+  s.onPointerObservable.add(handleDrag);
+
+  // Safety net: if the viewpoint height ever drifts far outside a normal
+  // standing range (e.g. through an unexpected XR/feature glitch), snap it
+  // back down to the floor instead of letting the person float away.
+  let heightWarned = false;
+  s.onBeforeRenderObservable.add(() => {
+    if (!xrHelper || xrHelper.baseExperience.state !== BABYLON.WebXRState.IN_XR) return;
+    const cam = xrHelper.baseExperience.camera;
+    if (cam.position.y > 2.3 || cam.position.y < 0.2) {
+      cam.position.y = 1.6; // average standing eye height
+      if (!heightWarned) {
+        logXrDebug("Höhe automatisch korrigiert (Boden-Sicherung aktiv)");
+        heightWarned = true;
+        setTimeout(() => heightWarned = false, 3000);
+      }
+    }
+  });
+
+  return s;
+}
+
+function showWelcomeSign(s){
+  const plane = BABYLON.MeshBuilder.CreatePlane("welcomeSign", { width: 1.4, height: 0.5 }, s);
+  const camera = s.activeCamera;
+  const forward = camera.getForwardRay ? camera.getForwardRay().direction : new BABYLON.Vector3(0, 0, 1);
+  plane.position = (camera.position || BABYLON.Vector3.Zero()).add(forward.scale(1.6)).add(new BABYLON.Vector3(0, 0.1, 0));
+  plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+  plane.isPickable = false;
+
+  const dt = new BABYLON.DynamicTexture("welcomeTex", { width: 700, height: 250 }, s);
+  dt.hasAlpha = true;
+  const ctx = dt.getContext();
+  ctx.clearRect(0, 0, 700, 250);
+  ctx.fillStyle = "#ffffff";
+  roundRect(ctx, 4, 4, 692, 242, 24);
+  ctx.fillStyle = "#E3001B";
+  ctx.fillRect(4, 4, 692, 14);
+  ctx.fillStyle = "#E3001B";
+  ctx.beginPath();
+  ctx.arc(90, 125, 55, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 22px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("MB", 90, 133);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#201D22";
+  ctx.font = "bold 34px sans-serif";
+  ctx.fillText("Malerbetrieb Bäßgen", 170, 110);
+  ctx.font = "24px sans-serif";
+  ctx.fillStyle = "#6b6560";
+  ctx.fillText("Baustellen-Scan Viewer", 170, 150);
+  dt.update();
+
+  const mat = new BABYLON.StandardMaterial("welcomeMat", s);
+  mat.diffuseTexture = dt;
+  mat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+  mat.backFaceCulling = false;
+  mat.useAlphaFromDiffuseTexture = true;
+  plane.material = mat;
+
+  setTimeout(() => plane.dispose(), 4000);
+}
+
+function disposeCurrentModel(){
+  if (currentRoot) {
+    currentRoot.dispose(false, true);
+    currentRoot = null;
+  }
+}
+
+async function loadModel(index){
+  const m = MODELS[index];
+  if (!m) return;
+  currentModelIndex = index;
+  empty.style.display = 'none';
+  hint.style.display = 'block';
+  disposeCurrentModel();
+  showStatus('Lade Modell …');
+
+  try {
+    const result = await BABYLON.SceneLoader.ImportMeshAsync("", "", m.src, scene);
+    currentRoot = new BABYLON.TransformNode("modelRoot", scene);
+    result.meshes.forEach(mesh => { if (!mesh.parent) mesh.parent = currentRoot; });
+
+    const camera = scene.activeCamera;
+    if (camera && camera.setTarget) {
+      let min = null, max = null;
+      result.meshes.forEach(mesh => {
+        if (!mesh.getBoundingInfo) return;
+        const bb = mesh.getBoundingInfo().boundingBox;
+        const meshMin = bb.minimumWorld, meshMax = bb.maximumWorld;
+        min = min ? BABYLON.Vector3.Minimize(min, meshMin) : meshMin.clone();
+        max = max ? BABYLON.Vector3.Maximize(max, meshMax) : meshMax.clone();
+      });
+      if (min && max) {
+        const center = min.add(max).scale(0.5);
+        camera.setTarget(center);
+        camera.radius = BABYLON.Vector3.Distance(min, max) * 0.8 || 4;
+      }
+    }
+    statusEl.style.display = 'none';
+    renderNotes(m.notes);
+  } catch (err) {
+    console.error(err);
+    showStatus('Fehler beim Laden — Dateiname/Pfad in MODELS prüfen.', 6000);
+  }
+}
+
+function populateSelect(){
+  select.innerHTML = '';
+  MODELS.forEach((m, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = m.name;
+    select.appendChild(opt);
+  });
+}
+
+(async () => {
+  scene = await createScene();
+  engine.runRenderLoop(() => scene.render());
+  window.addEventListener('resize', () => engine.resize());
+
+  if (MODELS.length) {
+    populateSelect();
+    select.addEventListener('change', e => loadModel(parseInt(e.target.value, 10)));
+    loadModel(0);
+  } else {
+    select.style.display = 'none';
+  }
+})();
+</script>
+
+</body>
+</html>

@@ -794,7 +794,7 @@ function startSprayStroke(pick, controller){
   const mat = new BABYLON.PBRMaterial("paintMat-" + Date.now(), scene);
   mat.metallic = 0;
   mat.roughness = 0.9; // matte paint look
-  mat.environmentIntensity = 0.35; // the scene's IBL otherwise adds noticeable ambient brightness on top of the tint, making patches read lighter than the wall around them; lower = darker/more muted
+  mat.environmentIntensity = 0.12; // the scene's IBL otherwise adds noticeable ambient brightness on top of the tint, making patches read lighter than the wall around them; lower = darker/more muted
   mat.unlit = paintUnlit; // exact reference color vs. reacting to scene light — toggle in the UI
   mat.backFaceCulling = false;
   mat.twoSidedLighting = true;

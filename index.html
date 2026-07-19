@@ -551,7 +551,7 @@ function computeWallDataForModel(meshes, roomMinY, roomMaxY){
 let paintMode = false;
 let selectedColor = PAINT_COLORS[0].hex;
 let paintPatches = []; // meshes created for the current model, cleared on model switch
-let paintUnlit = true; // true = exact hex reference color, false = reacts to scene lighting like a real paint would
+let paintUnlit = false; // false = shaded like the surrounding wall (realistic default); true = exact hex reference color, ignoring scene light
 
 function setPaintUnlit(unlit){
   paintUnlit = unlit;
@@ -617,6 +617,7 @@ lightModeToggle.addEventListener('click', () => {
   setPaintUnlit(!paintUnlit);
   syncLightModeToggle();
 });
+syncLightModeToggle(); // make the label match the actual default mode
 
 function clearPaintPatches(){
   if (sprayHeld) endSprayStroke();
@@ -803,16 +804,10 @@ function startSprayStroke(pick, controller){
   // bright. Falls back to flat color if the wall has no usable texture/UVs.
   const sourceTexture = mesh.material && mesh.material.albedoTexture ? mesh.material.albedoTexture : null;
   const hasUvs = mesh.isVerticesDataPresent(BABYLON.VertexBuffer.UVKind);
+  mat.albedoColor = BABYLON.Color3.FromHexString(selectedColor);
   if (sourceTexture && hasUvs) {
     mat.albedoTexture = sourceTexture;
-    // The texture darkens the result (it's multiplied in), so brighten the
-    // tint a little to keep the perceived hue near the chosen swatch.
-    const c = BABYLON.Color3.FromHexString(selectedColor);
-    mat.albedoColor = new BABYLON.Color3(
-      Math.min(1, c.r * 1.35), Math.min(1, c.g * 1.35), Math.min(1, c.b * 1.35)
-    );
   } else {
-    mat.albedoColor = BABYLON.Color3.FromHexString(selectedColor);
     logXrDebug('Hinweis: keine Wandtextur/UVs — Farbe wird flach aufgetragen.');
   }
   sprayPatchMesh.material = mat;
